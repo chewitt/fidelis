@@ -31,14 +31,15 @@ msg_opt_complete(){
 }
 
 do_install(){
-
   # practical options for curl. use with care.
   CURL_OPTS="--insecure"
+
   # install basic packages
   yum install -y yum-utils device-mapper-persistent-data lvm2
 
   # install docker-ce
   yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
   # install EPEL using rpm so it works for both RHEL and CentOS
   yum install -y http://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
 
@@ -49,10 +50,9 @@ do_install(){
   yum install -y http://mirror.centos.org/centos/7/extras/x86_64/Packages/container-selinux-2.107-3.el7.noarch.rpm
   yum install -y docker-ce docker-ce-cli containerd.io p7zip p7zip-plugins
 
-  # start docker services
-  systemctl start docker
-  # enable docker on boot
+  # enable and start docker services
   systemctl enable docker
+  systemctl start docker
 
   # install docker compose
   DCVER=$(curl $CURL_OPTS --silent "https://api.github.com/repos/docker/compose/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
@@ -65,8 +65,8 @@ do_install(){
   # configure firewall for fidelis services if firewallD is running
 
   firewall-cmd --state &>/dev/null
-  if [ $? -eq 0 ]; 
-    then 
+  if [ $? -eq 0 ];
+    then
       echo "Firewall is running, adding exceptions."
       firewall-cmd --permanent --add-port=80/tcp
       firewall-cmd --permanent --add-port=443/tcp
@@ -83,7 +83,7 @@ do_install(){
       firewall-cmd --permanent --add-port=9333/tcp
       firewall-cmd --reload
     else
-      echo "Firewall is not running." 
+      echo "Firewall is not running."
   fi
 
   # set sysctl tuning
