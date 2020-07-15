@@ -8,6 +8,10 @@ test_root(){
   fi
 }
 
+test_centos(){
+  VERSION=$(rpm --eval '%{centos_ver}')
+}
+
 test_github(){
   CURL=$(curl -k -sI https://github.com | head -n 1 | grep 200)
   if [ -z "$CURL" ]; then
@@ -20,13 +24,17 @@ test_github(){
 
 msg_install_complete(){
   echo ""
-  echo "INFO: CentOS7 Preparation Completed. Please reboot before intalling Fidelis Endpoint!"
+  echo "INFO: CentOS Preparation Completed. Please reboot before intalling Fidelis Endpoint!"
+  if [ "$VERSION}" = "8" ]; then
+    echo ""
+    echo "INFO: Also remember to run './centos.sh perms' after installing!"
+  fi
   echo ""
 }
 
 msg_opt_complete(){
   echo ""
-  echo "INFO: CentOS7 Disk Preparation Completed!"
+  echo "INFO: CentOS Disk Preparation Completed!"
   echo ""
 }
 
@@ -41,17 +49,26 @@ do_install(){
   yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 
   # install EPEL using rpm so it works for both RHEL and CentOS
-  yum install -y http://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+  yum install -y http://dl.fedoraproject.org/pub/epel/epel-release-latest-${VERSION}.noarch.rpm
 
   # update base OS
   yum update -y
 
   # install required packages
-  yum install -y http://mirror.centos.org/centos/7/extras/x86_64/Packages/container-selinux-2.107-3.el7.noarch.rpm
-  yum install -y docker-ce docker-ce-cli containerd.io p7zip p7zip-plugins
+  case $VERSION in
+    CentOS7|7)
+      yum install -y http://mirror.centos.org/centos/7/extras/x86_64/Packages/container-selinux-2.107-3.el7.noarch.rpm
+      yum install -y docker-ce docker-ce-cli containerd.io p7zip p7zip-plugins
+      ;;
+    CentOS8|8)
+      yum install -y http://mirror.centos.org/centos/8/AppStream/x86_64/os/Packages/container-selinux-2.124.0-1.module_el8.2.0+305+5e198a41.noarch.rpm
+      dnf install --nobest -y docker-ce docker-ce-cli p7zip p7zip-plugins
+      dnf install -y https://download.docker.com/linux/centos/7/x86_64/stable/Packages/containerd.io-1.2.13-3.2.el7.x86_64.rpm
+    ;;
+  esac
 
   # enable and start docker services
-  systemctl enable docker
+  systemctl enable --now docker
   systemctl start docker
 
   # install docker compose
@@ -68,6 +85,9 @@ do_install(){
   if [ $? -eq 0 ];
     then
       echo "Firewall is running, adding exceptions."
+      if [ "${VERSION}" = "8" ]; then
+        firewall-cmd --zone=public --add-masquerade --permanent
+      fi
       firewall-cmd --permanent --add-port=80/tcp
       firewall-cmd --permanent --add-port=443/tcp
       firewall-cmd --permanent --add-port=444/tcp
@@ -93,7 +113,7 @@ fs.nr_open=2097152
 net.core.somaxconn=32768
 net.ipv4.tcp_max_syn_backlog=16384
 net.core.netdev_max_backlog=16384
-net.ipv4.ip_local_port_range=1000 65535
+net.ipv4.ip_local_port_range=1024 65535
 net.core.rmem_default=262144
 net.core.wmem_default=262144
 net.core.rmem_max=16777216
@@ -124,6 +144,16 @@ EOF
   sysctl -p
 }
 
+do_perms(){
+  if [ -d /opt/fidelis_endpoint ]; then
+    restorecon -rv /opt/fidelis_endpoint
+    systemctl daemon-reload
+  else
+    echo "ERROR: /opt/fidelis_endpoint does not exist!"
+    exit 1
+  fi
+}
+
 do_opt(){
   if [ -z "$2" ]; then
     echo "ERROR: No /dev/device specified!"
@@ -142,6 +172,7 @@ do_opt(){
 case $1 in
   install)
     test_root
+    test_centos
     test_github
     do_install
     msg_install_complete
@@ -150,12 +181,16 @@ case $1 in
     do_opt "$@"
     msg_opt_complete
     ;;
+  perms)
+    do_perms
+    ;;
   *)
     echo "ERROR: No options specified!"
     echo ""
     echo "examples:"
-    echo "./centos7.sh install"
-    echo "./centos7.sh opt /dev/sdb"
+    echo "./centos.sh install"
+    echo "./centos.sh perms"
+    echo "./centos.sh opt /dev/sdb"
     echo ""
     ;;
 esac
