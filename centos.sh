@@ -1,6 +1,15 @@
 #!/bin/bash
 # SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 
+# ****** INSTRUCTIONS *******
+#
+# 1. Make the script executable with chmod +x
+# 2. Run the main preparation with ./centos.sh prepare
+# 3. If the /dev/device for /opt/fidelis_endpoint is /dev/sdb, run ./centos.sh opt /dev/sdb
+# 4. If using CentOS v8, run ./centos.sh perms
+# 5. Reboot the server
+# 6. Install Fidelis Endpoint
+
 test_root(){
   if [ "$(id -u)" != "0" ]; then
     echo "ERROR: This script must be run with sudo/root privileges"
@@ -170,7 +179,7 @@ do_opt(){
 }
 
 case $1 in
-  install)
+  prepare)
     test_root
     test_centos
     test_github
@@ -188,7 +197,7 @@ case $1 in
     echo "ERROR: No options specified!"
     echo ""
     echo "examples:"
-    echo "./centos.sh install"
+    echo "./centos.sh prepare"
     echo "./centos.sh perms"
     echo "./centos.sh opt /dev/sdb"
     echo ""
