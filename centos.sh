@@ -54,6 +54,9 @@ do_install(){
   # install basic packages
   yum install -y yum-utils device-mapper-persistent-data lvm2
 
+  # install useful utils
+  yum install -y screen htop nano
+
   # install docker-ce
   yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 
