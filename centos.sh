@@ -54,9 +54,6 @@ do_install(){
   # install basic packages
   yum install -y yum-utils device-mapper-persistent-data lvm2
 
-  # install useful utils
-  yum install -y screen htop nano
-
   # install docker-ce
   yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 
@@ -78,6 +75,9 @@ do_install(){
       dnf install -y https://download.docker.com/linux/centos/7/x86_64/stable/Packages/containerd.io-1.2.13-3.2.el7.x86_64.rpm
     ;;
   esac
+
+  # install useful utils from EPEL
+  yum install -y htop nano screen
 
   # enable and start docker services
   systemctl enable --now docker
