@@ -1,5 +1,4 @@
 #!/bin/bash
-set -x
 
 # from: https://reece.tech/posts/elasticsearch-unassigned-shard/
 # script for fixing unallocated shards in ElasticSearch
@@ -19,7 +18,7 @@ for line in $(curl -s ${ESHOST}:9200/_cat/shards | fgrep UNASSIGNED); do
   {
     "index" : '\"${INDEX}\"',
     "shard" : '\"${SHARD}\"',
-    "node" : '\"${1ST_NODE}\"',
+    "node" : '\"${FIRST_NODE}\"',
     "accept_data_loss" : true
   }
 }
