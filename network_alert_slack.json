@@ -1,0 +1,12 @@
+{
+	"channel": "alerts",
+	"attachments": [{
+		"mrkdwn_in": [
+			"text"
+		],
+		"color": "#36a64f",
+		"title": "Fidelis Network Alert - %SEVERITY%",
+		"text": "<https://fn.fidelis.ae/j/alert/main.html#/alerts/detail/Console-%ALERT_ID%|%SUMMARY%>"
+	}]
+}
+
