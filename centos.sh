@@ -91,33 +91,6 @@ do_install(){
   # ensure /usr/local/bin is in $PATH for future sessions
   echo 'pathmunge /usr/local/bin' > /etc/profile.d/docker-compose.sh
 
-  # configure firewall for fidelis services if firewallD is running
-
-  firewall-cmd --state &>/dev/null
-  if [ $? -eq 0 ];
-    then
-      echo "Firewall is running, adding exceptions."
-      if [ "${VERSION}" = "8" ]; then
-        firewall-cmd --zone=public --add-masquerade --permanent
-      fi
-      firewall-cmd --permanent --add-port=80/tcp
-      firewall-cmd --permanent --add-port=443/tcp
-      firewall-cmd --permanent --add-port=444/tcp
-      firewall-cmd --permanent --add-port=445/tcp
-      firewall-cmd --permanent --add-port=5432/tcp
-      firewall-cmd --permanent --add-port=8440/tcp
-      firewall-cmd --permanent --add-port=8887/tcp
-      firewall-cmd --permanent --add-port=8888/tcp
-      firewall-cmd --permanent --add-port=8889/tcp
-      firewall-cmd --permanent --add-port=9001/tcp
-      firewall-cmd --permanent --add-port=9200/tcp
-      firewall-cmd --permanent --add-port=9300/tcp
-      firewall-cmd --permanent --add-port=9333/tcp
-      firewall-cmd --reload
-    else
-      echo "Firewall is not running."
-  fi
-
   # set sysctl tuning
   tee /etc/sysctl.d/99-sysctl.conf > /dev/null <<EOF
 fs.file-max=2097152
@@ -181,6 +154,33 @@ do_opt(){
   fi
 }
 
+do_firewall(){
+  firewall-cmd --state &>/dev/null
+  if [ $? -eq 0 ];
+    then
+      echo "Firewall is running, adding exceptions."
+      if [ "${VERSION}" = "8" ]; then
+        firewall-cmd --zone=public --add-masquerade --permanent
+      fi
+      firewall-cmd --permanent --add-port=80/tcp
+      firewall-cmd --permanent --add-port=443/tcp
+      firewall-cmd --permanent --add-port=444/tcp
+      firewall-cmd --permanent --add-port=445/tcp
+      firewall-cmd --permanent --add-port=5432/tcp
+      firewall-cmd --permanent --add-port=8440/tcp
+      firewall-cmd --permanent --add-port=8887/tcp
+      firewall-cmd --permanent --add-port=8888/tcp
+      firewall-cmd --permanent --add-port=8889/tcp
+      firewall-cmd --permanent --add-port=9001/tcp
+      firewall-cmd --permanent --add-port=9200/tcp
+      firewall-cmd --permanent --add-port=9300/tcp
+      firewall-cmd --permanent --add-port=9333/tcp
+      firewall-cmd --reload
+    else
+      echo "Firewall is not running."
+  fi
+}
+
 case $1 in
   prepare)
     test_root
@@ -188,6 +188,9 @@ case $1 in
     test_github
     do_install
     msg_install_complete
+    ;;
+  firewall)
+    do_firewall
     ;;
   opt)
     do_opt "$@"
@@ -202,6 +205,7 @@ case $1 in
     echo "examples:"
     echo "./centos.sh prepare"
     echo "./centos.sh perms"
+    echo "./centos.sh firewall"
     echo "./centos.sh opt /dev/sdb"
     echo ""
     ;;
