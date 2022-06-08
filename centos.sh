@@ -90,7 +90,9 @@ do_install(){
 
   # ensure /usr/local/bin is in $PATH for future sessions
   echo 'pathmunge /usr/local/bin' > /etc/profile.d/docker-compose.sh
+}
 
+do_tuning(){
   # set sysctl tuning
   tee /etc/sysctl.d/99-sysctl.conf > /dev/null <<EOF
 fs.file-max=2097152
@@ -118,6 +120,7 @@ net.ipv4.neigh.default.gc_thresh3=32768
 vm.max_map_count=655300
 EOF
 
+  # set limits
   tee /etc/security/limits.d/21-nofile.conf > /dev/null <<EOF
 * soft nofile 1048576
 * hard nofile 1048576
@@ -199,6 +202,9 @@ case $1 in
   perms)
     do_perms
     ;;
+  tuning)
+    do_tuning
+    ;;
   *)
     echo "ERROR: No options specified!"
     echo ""
@@ -206,6 +212,7 @@ case $1 in
     echo "./centos.sh prepare"
     echo "./centos.sh perms"
     echo "./centos.sh firewall"
+    echo "./centos.sh tuning"
     echo "./centos.sh opt /dev/sdb"
     echo ""
     ;;
