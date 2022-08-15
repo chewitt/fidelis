@@ -3,12 +3,13 @@
 
 # ****** INSTRUCTIONS *******
 #
-# 1. Make the script executable with chmod +x
-# 2. Run the main preparation with ./centos.sh prepare
-# 3. If the /dev/device for /opt/fidelis_endpoint is /dev/sdb, run ./centos.sh opt /dev/sdb
-# 4. If using CentOS v8, run ./centos.sh perms
+# 1. Download with 'curl -OJ https://raw.githubusercontent.com/chewitt/fidelis/centos.sh'
+# 2. Make the script executable with 'chmod +x'
+# 3. Run the main preparation with './centos.sh prepare'
+# 4. If the /dev/device for /opt/fidelis_endpoint is /dev/sdb, run './centos.sh opt /dev/sdb'
 # 5. Reboot the server
 # 6. Install Fidelis Endpoint
+# 7. If using v8/v9 distros, stop containers and run './centos.sh perms' after install
 
 test_root(){
   if [ "$(id -u)" != "0" ]; then
@@ -33,9 +34,8 @@ test_github(){
 
 msg_install_complete(){
   echo ""
-  echo "INFO: CentOS Preparation Completed. Please reboot before intalling Fidelis Endpoint!"
-  if [ "$VERSION}" = "8" ]; then
-    echo ""
+  echo "INFO: Preparation Completed. Please reboot before intalling Fidelis Endpoint!"
+  if [ "${VERSION}" = "8" ] || [ "${VERSION}" = "9" ]; then
     echo "INFO: Also remember to run './centos.sh perms' after installing!"
   fi
   echo ""
@@ -43,7 +43,7 @@ msg_install_complete(){
 
 msg_opt_complete(){
   echo ""
-  echo "INFO: CentOS Disk Preparation Completed!"
+  echo "INFO: Disk Preparation Completed!"
   echo ""
 }
 
@@ -57,23 +57,22 @@ do_install(){
   # install docker-ce
   yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 
-  # install EPEL using rpm so it works for both RHEL and CentOS
-  yum install -y http://dl.fedoraproject.org/pub/epel/epel-release-latest-${VERSION}.noarch.rpm
+  # install EPEL using rpm so it works for both RHEL and CentOS derivatives
+  yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-${VERSION}.noarch.rpm
 
   # update base OS
   yum update -y
 
   # install required packages
-  case $VERSION in
-    CentOS7|7)
-      yum install -y http://mirror.centos.org/centos/7/extras/x86_64/Packages/container-selinux-2.107-3.el7.noarch.rpm
+  case ${VERSION} in
+    7)
+      yum install -y http://mirror.centos.org/centos/7/extras/x86_64/Packages/container-selinux-2.119.2-1.911c772.el7_8.noarch.rpm
       yum install -y docker-ce docker-ce-cli containerd.io p7zip p7zip-plugins
       ;;
-    CentOS8|8)
-      yum install -y http://mirror.centos.org/centos/8/AppStream/x86_64/os/Packages/container-selinux-2.124.0-1.module_el8.2.0+305+5e198a41.noarch.rpm
-      dnf install --nobest -y docker-ce docker-ce-cli p7zip p7zip-plugins
-      dnf install -y https://download.docker.com/linux/centos/7/x86_64/stable/Packages/containerd.io-1.2.13-3.2.el7.x86_64.rpm
-    ;;
+    8|9)
+      dnf erase -y buildah podman runc
+      dnf install --nobest -y docker-ce docker-ce-cli containerd.io container-selinux p7zip p7zip-plugins
+      ;;
   esac
 
   # install useful utils from EPEL
