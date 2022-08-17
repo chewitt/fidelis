@@ -52,7 +52,7 @@ do_install(){
   CURL_OPTS="--insecure"
 
   # install basic packages
-  yum install -y yum-utils device-mapper-persistent-data lvm2 sysstat
+  yum install -y yum-utils device-mapper-persistent-data lvm2 sysstat open-vm-tools
 
   # install docker-ce
   yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
