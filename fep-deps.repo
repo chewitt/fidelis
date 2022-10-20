@@ -1,0 +1,5 @@
+[fep-deps]
+name=Fidelis Endpoint Dependencies
+baseurl=https://dl.fidelis.ae/
+enabled=1
+gpgcheck=0
