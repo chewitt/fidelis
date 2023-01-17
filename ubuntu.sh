@@ -63,7 +63,7 @@ do_install(){
   apt-get -y autoremove
 
   # install basic dependencies
-  apt-get -y install apt-utils htop libdevmapper-dev lvm2 nano open-vm-tools p7zip screen sysstat
+  apt-get -y install apt-utils htop libdevmapper-dev lvm2 nano open-vm-tools p7zip-full screen sysstat
 
   # install packages needed for apt over https
   apt-get -y install apt-transport-https ca-certificates curl software-properties-common
