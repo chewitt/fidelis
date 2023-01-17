@@ -174,9 +174,9 @@ case $1 in
     echo "ERROR: No options specified!"
     echo ""
     echo "examples:"
-    echo "./centos.sh prepare"
-    echo "./centos.sh tuning"
-    echo "./centos.sh opt /dev/sdb"
+    echo "./ubuntu.sh prepare"
+    echo "./ubuntu.sh tuning"
+    echo "./ubuntu.sh opt /dev/sdb"
     echo ""
     ;;
 esac
