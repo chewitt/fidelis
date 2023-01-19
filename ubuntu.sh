@@ -62,6 +62,9 @@ do_install(){
   apt-get -y dist-upgrade
   apt-get -y autoremove
 
+  # remove snaps that can be problematic
+  snap remove --purge lxd docker
+
   # install basic dependencies
   apt-get -y install apt-utils htop libdevmapper-dev lvm2 nano open-vm-tools p7zip-full screen sysstat
 
