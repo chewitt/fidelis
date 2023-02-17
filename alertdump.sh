@@ -65,8 +65,7 @@ REMAINING=( ${#ALERTS[@]} )
 for ALERTID in "${ALERTS[@]}" ; do
   (( REMAINING-=1 ))
   echo "Downloading alert-${ALERTID}.pdf / ${REMAINING} alerts remaining"
-  curl -k -H "Content-Type:application/json;charset=UTF-8" \
-       -X GET https://${HOST}/j/rest/v1/alert/export/alertdetails/pdf?alertIds=${ALERTID} \
+  curl -k -X GET https://${HOST}/j/rest/v1/alert/export/alertdetails/pdf?alertIds=${ALERTID} \
        -H "x-uid: ${TOKEN}" > "alert-${ALERTID}.pdf"
   echo ""
 done
