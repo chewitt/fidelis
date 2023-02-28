@@ -36,8 +36,12 @@ p7zip-plugins
 sysstat
 htop
 nano
+netcat
+net-tools
 open-vm-tools
 screen
+tcpdump
+telnet
 # exclusions
 -fprintd-pam
 -intltool
