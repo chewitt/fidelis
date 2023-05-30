@@ -1,0 +1,343 @@
+#!/bin/bash
+
+# Create/Remove/Backup a CommandPost OpenVPN server or Create Sensor client VPN packages
+# Requires CommandPost v9.5.x or v9.6.x with iptables.
+
+if [ "$(id -u)" != "0" ]; then
+  echo -e "ERROR: This script must be run with root privileges\n"
+  exit 1
+fi
+
+HOSTNAME=$(hostname)
+HOSTIP=$(hostname -I | cut -d' ' -f 1)
+
+if [ -x /usr/sbin/openvpn ]; then
+  VPN_SERVER_CONF="/etc/openvpn/server/tun0.conf"
+  VPN_CLIENT_CONF="/etc/openvpn/client/tun0.conf"
+else
+  echo -e "ERROR: OpenVPN is not installed\n"
+  exit 1
+fi
+
+if [ -x /usr/share/easy-rsa/3.0/easyrsa ]; then
+  EASYRSA_CONF="/usr/share/easy-rsa/3.0/vars"
+else
+  echo -e "ERROR: Easy-RSA is not installed\n"
+  exit 1
+fi
+
+do_backup(){
+  BACKUPDIR="/opt/openvpn_backup_$(date '+%Y%m%d%H%M')"
+  mkdir -p "${BACKUPDIR}/openvpn"
+    cp -R /etc/openvpn/* "${BACKUPDIR}"/openvpn 2>/dev/null
+    cp /var/log/openvpn.log "${BACKUPDIR}"/openvpn 2>/dev/null
+  mkdir -p "${BACKUPDIR}/easy-rsa"
+    cp -R /usr/share/easy-rsa/* "${BACKUPDIR}"/easy-rsa
+}
+
+do_remove(){
+  do_backup
+  if systemctl is-active --quiet openvpn-server@tun0.service; then
+    systemctl stop openvpn-server@tun0.service
+    systemctl disable openvpn-server@tun0.service
+  elif systemctl is-active --quiet openvpn@server.service; then
+    systemctl stop openvpn@server.service
+    systemctl disable openvpn@server.service
+  elif systemctl is-active --quiet openvpn-client@tun0.service; then
+    systemctl stop openvpn-client@tun0.service
+    systemctl disable openvpn-client@tun0.service
+  elif systemctl is-active --quiet openvpn@client.service; then
+    systemctl stop openvpn@client.service
+    systemctl disable openvpn@client.service
+  fi
+  rm -f /etc/openvpn/server/* 2>/dev/null
+  rm -f /etc/openvpn/client/* 2>/dev/null
+  rm -f /etc/openvpn/server.conf 2>/dev/null
+  rm -f /etc/openvpn/client.conf 2>/dev/null
+  rm -f /etc/openvpn/ipp.txt 2>/dev/null
+  rm -f /etc/openvpn/openvpn-status.log 2>/dev/null
+  rm -f /usr/share/easy-rsa/3.0/vars 2>/dev/null
+  rm -rf /usr/share/easy-rsa/3.0/pki 2>/dev/null
+  rm -f /usr/share/easy-rsa/2.0/vars 2>/dev/null
+  rm -rf /usr/share/easy-rsa/2.0/keys 2>/dev/null
+  rm -f /etc/logrotate.d/openvpn 2>/dev/null
+  rm -f /var/log/openvpn.log 2>/dev/null
+  rm -f /FSS/html/nte.html 2>/dev/null
+  rm -rf /tmp/nte_sensor_connection* 2>/dev/null
+}
+
+do_setup(){
+  if [ -f "${VPN_SERVER_CONF}" ]; then
+    echo -e "ERROR: OpenVPN config already exists, aborting!\n"
+    exit 1
+  fi
+
+  echo 'set_var EASYRSA                 "$PWD"
+set_var EASYRSA_PKI             "$EASYRSA/pki"
+set_var EASYRSA_DN              "cn_only"
+set_var EASYRSA_REQ_COUNTRY     "US"
+set_var EASYRSA_REQ_PROVINCE    "Maryland"
+set_var EASYRSA_REQ_CITY        "Bethesda"
+set_var EASYRSA_REQ_ORG         "Fidelis-Network-Cloud-${HOSTNAME} CERTIFICATE AUTHORITY"
+set_var EASYRSA_REQ_EMAIL       "support@fidelissecurity.com"
+set_var EASYRSA_REQ_OU          "Cloud-DevOps"
+set_var EASYRSA_KEY_SIZE        2048
+set_var EASYRSA_ALGO            rsa
+set_var EASYRSA_CA_EXPIRE       7500
+set_var EASYRSA_CERT_EXPIRE     3650
+set_var EASYRSA_NS_SUPPORT      "no"
+set_var EASYRSA_NS_COMMENT      "FIDELIS-NETWORK-CLOUD-${HOSTNAME} CERTIFICATE AUTHORITY"
+set_var EASYRSA_EXT_DIR         "$EASYRSA/x509-types"
+set_var EASYRSA_SSL_CONF        "$EASYRSA/openssl-easyrsa.cnf"
+set_var EASYRSA_DIGEST          "sha256"
+' > "${EASYRSA_CONF}"
+
+  cd /usr/share/easy-rsa/3.0 || exit
+  ./easyrsa --batch clean-all
+  ./easyrsa --batch init-pki
+  ./easyrsa --batch gen-dh
+  ./easyrsa --batch build-ca nopass
+  ./easyrsa --batch build-server-full "${HOSTNAME}" nopass
+
+  cp /usr/share/easy-rsa/3.0/pki/private/"${HOSTNAME}".key /etc/openvpn/server/tun0.key
+  cp /usr/share/easy-rsa/3.0/pki/issued/"${HOSTNAME}".crt /etc/openvpn/server/tun0.crt
+  cp /usr/share/easy-rsa/3.0/pki/dh.pem /etc/openvpn/server/dh.pem
+  cp /usr/share/easy-rsa/3.0/pki/ca.crt /etc/openvpn/server/ca.crt
+  chmod 600 /etc/openvpn/server/tun0.key
+
+  echo 'local @@HOSTIP@@
+port 1194
+proto tcp
+dev tun
+ca /etc/openvpn/server/ca.crt
+cert /etc/openvpn/server/tun0.crt
+key /etc/openvpn/server/tun0.key
+dh /etc/openvpn/server/dh.pem
+server 172.16.16.0 255.255.255.0
+ifconfig-pool-persist /etc/openvpn/ipp.txt
+keepalive 10 120
+cipher AES-256-CBC
+tls-version-min 1.2
+tls-cipher TLS-DHE-RSA-WITH-AES-256-GCM-SHA384:TLS-DHE-RSA-WITH-AES-256-CBC-SHA256:TLS-DHE-RSA-WITH-AES-128-GCM-SHA256:TLS-DHE-RSA-WITH-AES-128-CBC-SHA256
+auth SHA512
+auth-nocache
+user nobody
+group nobody
+persist-key
+persist-tun
+status /etc/openvpn/openvpn-status.log
+log-append /var/log/openvpn.log
+daemon
+verb 3
+txqueuelen 10000
+' > "${VPN_SERVER_CONF}"
+  sed -i "s/@@HOSTIP@@/${HOSTIP}/g" "${VPN_SERVER_CONF}"
+
+  COLLECTOR=$(/fss/bin/get_components | grep -E "metadata" | cut -f1 -d",")
+  echo "1" > /proc/sys/net/ipv4/ip_forward
+  echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/70-fidelis-cloud-cp-forwarding.conf
+  if [ -z $(iptables -S | grep 1194) ]; then
+    iptables -I RH-Firewall-1-INPUT 3 -t filter -i eth0 -p TCP --dport 1194 -j ACCEPT
+    iptables -I RH-Firewall-1-INPUT 3 -t filter -i tun0 -p TCP --dport 5558 -j ACCEPT
+    iptables -I RH-Firewall-1-INPUT 3 -t filter ! -i eth0 -p TCP --dport 22 -j DROP
+    iptables -A PREROUTING -t nat -i tun0 -p tcp --dport 5558 -j DNAT --to-destination ${COLLECTOR}:5558
+    iptables -A POSTROUTING -t nat -o eth0 -j MASQUERADE
+    service iptables save
+  fi
+
+  echo '"/var/log/openvpn.log" {
+   daily
+   rotate 7
+   nocreate
+   copytruncate
+   missingok
+   notifempty
+   nocompress
+}' > /etc/logrotate.d/openvpn
+
+  PAGE="/FSS/html/nte.html"
+  echo '<html><body><script>window.location = "/j/download/package.html?obj=ntepkg"</script></body></html>' > "${PAGE}"
+  chown fidelis:fidelis "${PAGE}"
+  chmod 440 "${PAGE}"
+
+  systemctl stop openvpn-client@tun0.service
+  systemctl disable openvpn-client@tun0.service
+  systemctl stop openvpn@client.service
+  systemctl disable openvpn@client.service
+  systemctl stop openvpn@server.service
+  systemctl disable openvpn@server.service
+  systemctl stop openvpn@service.service
+  systemctl disable openvpn@service.service
+
+  systemctl enable openvpn-server@tun0.service
+  systemctl start openvpn-server@tun0.service
+  sleep 10
+  systemctl status openvpn-server@tun0.service
+}
+
+do_package(){
+  if [ -z "$2" ]; then
+    echo -e "ERROR: You must provide a sensor name to create the package\n"
+    exit 1
+  fi
+  if [ ! -f "/usr/share/easy-rsa/3.0/vars" ]; then
+    echo -e "ERROR: Easy-RSA config missing. OpenVPN server must be installed first"
+    echo -e "       e.g. ./vpntool server\n"
+    exit 1
+  fi
+  if [ -f "/usr/share/easy-rsa/3.0/pki/reqs/${2}.req" ]; then
+    echo -e "ERROR: Client config ${2} already exists, aborting!\n"
+    exit 1
+  fi
+
+  cd /usr/share/easy-rsa/3.0 || exit
+  ./easyrsa --batch build-client-full ${2} nopass
+
+  PKGDIR="/tmp/nte_sensor_connection"
+  rm -rf "${PKGDIR}" 2>/dev/null
+  mkdir -p "${PKGDIR}"
+  cp /usr/share/easy-rsa/3.0/pki/ca.crt "${PKGDIR}"
+  cp /usr/share/easy-rsa/3.0/pki/issued/${2}.crt "${PKGDIR}"/tun0.crt
+  cp /usr/share/easy-rsa/3.0/pki/private/${2}.key "${PKGDIR}"/tun0.key
+  cp /etc/logrotate.d/openvpn "${PKGDIR}"/openvpn.logrotate
+
+  CPPUBIP=$(dig +short myip.opendns.com @resolver1.opendns.com)
+  CLIENT_CONF="${PKGDIR}/tun0.conf"
+
+  echo 'client
+dev tun
+proto tcp
+remote @@CPPUBIP@@ 1194
+resolv-retry infinite
+nobind
+user nobody
+group nobody
+persist-key
+persist-tun
+ca /etc/openvpn/client/ca.crt
+cert /etc/openvpn/client/tun0.crt
+key /etc/openvpn/client/tun0.key
+remote-cert-tls server
+cipher AES-256-CBC
+auth SHA512
+auth-nocache
+verb 3
+log-append /var/log/openvpn.log
+txqueuelen 10000
+' > "${CLIENT_CONF}"
+  sed -i "s/@@CPPUBIP@@/${CPPUBIP}/g" "${CLIENT_CONF}"
+
+  cd "${PKGDIR}" || exit
+  tar -czf "${PKGDIR}.tgz" *
+  mv "${PKGDIR}.tgz" /FSS/thirdparty/
+  chmod 644 /FSS/thirdparty/nte_sensor_connection.tgz
+  chown fidelis:fidelis /FSS/thirdparty/nte_sensor_connection.tgz
+  rm -rf "${PKGDIR}*"
+
+  SAVEDATETIME=$(date '+%Y%m%d%H%M')
+  mkdir -p /opt/openvpn_clients
+  cp /FSS/thirdparty/nte_sensor_connection.tgz /opt/openvpn_clients/nte_sensor_connection_${2}_${SAVEDATETIME}.tgz
+
+  echo -e "INFO: OpenVPN Sensor connection package for '${2}' created!"
+  echo -e "INFO: Download it from https://${CPPUBIP}/nte.html\n"
+}
+
+do_install(){
+  if [ -z "$2" ]; then
+    echo -e "ERROR: No sensor connection package filename was provided"
+    echo -e "       e.g. ./vpntool install nte_sensor_connection.tgz\n"
+  fi
+
+  UNPACKDIR="/tmp/nte_sensor_connection"
+  rm -rf "${UNPACKDIR}"
+  mkdir -p "${UNPACKDIR}"
+  tar -xzvf "${2}" -C ${UNPACKDIR}
+  cp ${UNPACKDIR}/tun0.crt /etc/openvpn/client/
+  cp ${UNPACKDIR}/tun0.key /etc/openvpn/client/
+  cp ${UNPACKDIR}/tun0.conf /etc/openvpn/client/
+  cp ${UNPACKDIR}/ca.crt /etc/openvpn/client/
+  cp ${UNPACKDIR}/openvpn.logrotate /etc/logrotate.d/openvpn
+
+  SYSTEM=$(awk '$1 == "system_type" {print $2}' /FSS/etc/system.cf)
+  case "${SYSTEM}" in
+    commandpost*)
+      echo -e "ERROR: CommandPost hosts the OpenVPN server, aborting!\n" && exit 1
+      ;;
+    direct*|internal*)
+      CONFIG="/FSS/etc/iptrap.cf"
+      sed -i '/disable pcapd/d' /FSS/etc/system.cf && echo 'disable pcapd' >> /FSS/etc/system.cf
+      ;;
+    mail*)
+      CONFIG="/FSS/etc/mailer.cf"
+      ;;
+    proxy*)
+      CONFIG="/FSS/etc/icapd.cf"
+      ;;
+    *)
+      echo -e "ERROR: Cannot detect system_type\n" && exit 1
+      ;;
+  esac
+
+  CPTUNIP="172.16.16.1"
+  REMOTE=$(awk '/1194/ {print $2}' /etc/openvpn/client/tun0.conf)
+  sed -i 's:^#\?\(compress_metadata\) \+\(1\|0\)$:\1 1:' "${CONFIG}"
+  sed -i '/^collector \+/d' "${CONFIG}"
+  echo "collector ${CPTUNIP}" >> "${CONFIG}"
+
+  systemctl stop openvpn@client.service
+  systemctl disable openvpn@client.service
+  systemctl stop openvpn@server.service
+  systemctl disable openvpn@server.service
+  systemctl stop openvpn-server@tun0.service
+  systemctl disable openvpn-server@tun0.service
+  systemctl stop openvpn@service.service
+  systemctl disable openvpn@service.service
+
+  systemctl restart pman
+  systemctl enable openvpn-client@tun0.service
+  systemctl start openvpn-client@tun0.service
+
+  rm -rf "${UNPACKDIR}"
+  sleep 10
+
+  TUN0IP=$(ip -brief addr show tun0 2>/dev/null | awk '{print $3}')
+  if [ -n "${TUN0IP}" ]; then
+    echo -e "INFO: Sensor OpenVPN client package installed"
+    echo -e "INFO: Register the sensor on CommandPost using the tun0 IP ${TUN0IP}\n"
+  else
+    echo -e "INFO: Sensor OpenVPN client package installed"
+    echo -e "WARN: No tun0 interface found, check /var/log/openvpn.log for errors\n"
+  fi
+}
+
+do_usage(){
+  echo "./vpntool -p|package <name>   : create a new nte_sensor_connection.tgz package"
+  echo "          -i|install <file>   : install a nte_sensor_connection.tgz package"
+  echo "          -s|setup            : setup a new server on this host"
+  echo "          -b|backup           : backup the server config to /opt"
+  echo "          -r|remove           : remove (erase) current config on this host"
+  echo ""
+}
+
+case "$1" in
+  -b|backup)
+    do_backup
+    ;;
+  -i|install)
+    do_install "$@"
+    ;;
+  -p|package)
+    do_package "$@"
+    ;;
+  -r|remove)
+    do_remove
+    ;;
+  -s|setup)
+    do_setup
+    ;;
+  *)
+    do_usage
+    ;;
+esac
+
+exit
